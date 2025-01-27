@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station - Teacher Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <main>
+    <h1>Teacher Dashboard</h1>
+    <form id="create-classroom-form">
+      <label for="classroom-name">Classroom Name:</label>
+      <input type="text" id="classroom-name" required>
+      <label for="max-students">Max Students:</label>
+      <input type="number" id="max-students" min="1" required>
+      <button type="submit" class="btn">Create Classroom</button>
+    </form>
+    <h2>My Classrooms</h2>
+    <div id="teacher-classrooms"></div>
+  </main>
+
+  <div id="footer"></div>
+</body>
+</html>
