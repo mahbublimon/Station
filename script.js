@@ -1,19 +1,15 @@
-// Dynamically load the navbar and footer on each page
-document.addEventListener("DOMContentLoaded", () => {
-    const navbar = document.getElementById("navbar");
-    const footer = document.getElementById("footer");
-  
+document.addEventListener('DOMContentLoaded', () => {
     // Load navbar
-    fetch("navbar.html")
+    fetch('/navbar.html')
       .then((response) => response.text())
-      .then((data) => {
-        navbar.innerHTML = data;
+      .then((html) => {
+        document.getElementById('navbar').innerHTML = html;
       });
   
     // Load footer
-    fetch("footer.html")
+    fetch('/footer.html')
       .then((response) => response.text())
-      .then((data) => {
-        footer.innerHTML = data;
+      .then((html) => {
+        document.getElementById('footer').innerHTML = html;
       });
   });  

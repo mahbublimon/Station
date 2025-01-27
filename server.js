@@ -1,16 +1,14 @@
 const express = require('express');
 const path = require('path');
-const bcrypt = require('bcryptjs');
-const session = require('express-session');
 const bodyParser = require('body-parser');
-const connectDB = require('./db');
-const User = require('./models/User');
+const session = require('express-session');
+const fs = require('fs');
 
+// Create Express app
 const app = express();
-connectDB();
 
 // Middleware
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname)));
 app.use(
@@ -21,10 +19,15 @@ app.use(
   })
 );
 
-// Routes for pages
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+// Mock Database
+let users = []; // Store users temporarily in-memory
+let classrooms = []; // Store classrooms temporarily in-memory
+
+// Serve HTML pages
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'home.html')));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/signup', (req, res) => res.sendFile(path.join(__dirname, 'signup.html')));
+app.get('/classroom', (req, res) => res.sendFile(path.join(__dirname, 'classroom.html')));
 app.get('/teacher', (req, res) => {
   if (req.session.user && req.session.user.role === 'teacher') {
     res.sendFile(path.join(__dirname, 'teacher.html'));
@@ -32,60 +35,119 @@ app.get('/teacher', (req, res) => {
     res.redirect('/login');
   }
 });
-app.get('/classroom', (req, res) => {
-  if (req.session.user) {
-    res.sendFile(path.join(__dirname, 'classroom.html'));
-  } else {
-    res.redirect('/login');
+
+// User Signup
+app.post('/signup', (req, res) => {
+  const { name, email, password, role } = req.body;
+
+  // Validate role
+  if (role !== 'student' && role !== 'teacher') {
+    return res.status(400).send('Invalid role selected.');
   }
+
+  // Check if email is already registered
+  const existingUser = users.find((user) => user.email === email);
+  if (existingUser) {
+    return res.status(400).send('Email already registered.');
+  }
+
+  // Add user to mock database
+  const newUser = { id: Date.now(), name, email, password, role };
+  users.push(newUser);
+
+  res.redirect('/login');
 });
 
-// Signup route
-app.post('/signup', async (req, res) => {
-  const { fullName, email, password, role } = req.body;
-
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).send('Email already in use');
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ fullName, email, password: hashedPassword, role });
-    await user.save();
-
-    res.redirect('/login');
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).send('Error creating account');
-  }
-});
-
-// Login route
-app.post('/login', async (req, res) => {
+// User Login
+app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).send('User not found');
+  // Find user
+  const user = users.find((user) => user.email === email && user.password === password);
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).send('Invalid password');
+  if (!user) {
+    return res.status(400).send('Invalid email or password.');
+  }
 
-    req.session.user = { id: user._id, role: user.role };
-    res.redirect(user.role === 'teacher' ? '/teacher' : '/classroom');
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).send('Error logging in');
+  // Save user session
+  req.session.user = { id: user.id, name: user.name, role: user.role };
+  if (user.role === 'teacher') {
+    res.redirect('/teacher');
+  } else {
+    res.redirect('/classroom');
   }
 });
 
-// Logout route
+// Logout
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
-    if (err) return res.status(500).send('Error logging out');
+    if (err) {
+      return res.status(500).send('Error logging out.');
+    }
     res.redirect('/');
   });
 });
 
-// Start server
+// Create Classroom (Teacher Only)
+app.post('/create-classroom', (req, res) => {
+  const { classroomName, studentLimit } = req.body;
+
+  if (req.session.user && req.session.user.role === 'teacher') {
+    // Create new classroom
+    const newClassroom = {
+      id: Date.now(),
+      name: classroomName,
+      limit: parseInt(studentLimit, 10),
+      teacher: req.session.user.name,
+      students: [],
+    };
+
+    classrooms.push(newClassroom);
+    res.redirect('/teacher');
+  } else {
+    res.status(403).send('Unauthorized');
+  }
+});
+
+// Join Classroom (Student Only)
+app.post('/join-classroom', (req, res) => {
+  const { classroomId } = req.body;
+
+  if (req.session.user && req.session.user.role === 'student') {
+    const classroom = classrooms.find((c) => c.id === parseInt(classroomId, 10));
+
+    if (!classroom) {
+      return res.status(404).send('Classroom not found.');
+    }
+
+    if (classroom.limit <= classroom.students.length) {
+      return res.status(400).send('Classroom is full.');
+    }
+
+    // Add student to classroom
+    classroom.students.push(req.session.user.name);
+    res.redirect('/classroom');
+  } else {
+    res.status(403).send('Unauthorized');
+  }
+});
+
+// Fetch Classrooms for Display
+app.get('/classrooms', (req, res) => {
+  res.json(classrooms);
+});
+
+// Fetch Current User Info
+app.get('/user', (req, res) => {
+  if (req.session.user) {
+    res.json(req.session.user);
+  } else {
+    res.status(401).send('Not logged in.');
+  }
+});
+
+// Server Start
 const PORT = 3000;
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
